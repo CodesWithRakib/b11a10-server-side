@@ -85,15 +85,16 @@ const plantSchema = new mongoose.Schema(
 );
 const Plant = mongoose.model("Plant", plantSchema);
 
-// Initialize connection before handling requests
+// Connect to MongoDB
 let dbConnection;
-(async () => {
-  try {
-    dbConnection = await connectDB();
-  } catch (error) {
-    console.error("Failed to initialize database connection:", error);
-  }
-})();
+connectDB()
+  .then(() => {
+    dbConnection = true;
+  })
+  .catch((error) => {
+    console.error("MongoDB connection error:", error);
+    dbConnection = false;
+  });
 
 // Routes
 app.get("/", (req, res) => {
