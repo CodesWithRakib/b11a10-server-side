@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
+    "built": "node index.js",
     "start": "node index.js"
   },
   "author": "Md. Rakib Islam",
