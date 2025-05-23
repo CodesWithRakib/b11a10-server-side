@@ -8,6 +8,7 @@ const PORT = process.env.PORT || 5000;
 
 const app = express();
 
+//middleware
 app.use(cors());
 app.use(express.json());
 
@@ -23,7 +24,6 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
-connectDB();
 
 // Schema and Model
 
@@ -85,14 +85,31 @@ const plantSchema = new mongoose.Schema(
 );
 const Plant = mongoose.model("Plant", plantSchema);
 
+// Initialize connection before handling requests
+let dbConnection;
+(async () => {
+  try {
+    dbConnection = await connectDB();
+  } catch (error) {
+    console.error("Failed to initialize database connection:", error);
+  }
+})();
+
 // Routes
 app.get("/", (req, res) => {
   res.status(200).json({
     status: true,
     message: "Server is running",
+    dbStatus: dbConnection ? "connected" : "disconnected",
   });
 });
 app.get("/api/plants", async (req, res) => {
+  if (!dbConnection) {
+    return res.status(500).json({
+      status: false,
+      message: "Database connection error",
+    });
+  }
   try {
     const plants = await Plant.find();
     res.status(200).json({
@@ -109,6 +126,13 @@ app.get("/api/plants", async (req, res) => {
   }
 });
 app.get("/api/plants/:id", async (req, res) => {
+  if (!dbConnection) {
+    return res.status(500).json({
+      status: false,
+      message: "Database connection error",
+    });
+  }
+
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ status: false, message: "Invalid plant ID" });
@@ -129,28 +153,39 @@ app.get("/api/plants/:id", async (req, res) => {
 });
 
 app.post("/api/plants", async (req, res) => {
-  const plant = req.body;
-  console.log(plant);
-  if (
-    !plant.image ||
-    !plant.plantName ||
-    !plant.category ||
-    !plant.description ||
-    !plant.careLevel ||
-    !plant.wateringFrequency ||
-    !plant.lastWateredDate ||
-    !plant.nextWateringDate ||
-    !plant.healthStatus ||
-    !plant.userEmail ||
-    !plant.userName
-  ) {
-    return res
-      .status(400)
-      .json({ status: false, message: "All fields are required" });
+  if (!dbConnection) {
+    return res.status(500).json({
+      status: false,
+      message: "Database connection error",
+    });
   }
 
-  const newPlant = new Plant(plant);
+  const plant = req.body;
+  console.log(plant);
+  const requiredFields = [
+    "image",
+    "plantName",
+    "category",
+    "description",
+    "careLevel",
+    "wateringFrequency",
+    "lastWateredDate",
+    "nextWateringDate",
+    "healthStatus",
+    "userEmail",
+    "userName",
+  ];
+
+  const missingFields = requiredFields.filter((field) => !plant[field]);
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      status: false,
+      message: "All fields are required",
+      missingFields,
+    });
+  }
   try {
+    const newPlant = new Plant(plant);
     await newPlant.save();
     res.status(201).json({
       status: true,
@@ -167,28 +202,41 @@ app.post("/api/plants", async (req, res) => {
 });
 
 app.put("/api/plants/:id", async (req, res) => {
+  if (!dbConnection) {
+    return res.status(503).json({
+      status: false,
+      message: "Database not connected",
+    });
+  }
   const { id } = req.params;
   const plant = req.body;
-  if (
-    !plant.image ||
-    !plant.plantName ||
-    !plant.category ||
-    !plant.description ||
-    !plant.careLevel ||
-    !plant.wateringFrequency ||
-    !plant.lastWateredDate ||
-    !plant.nextWateringDate ||
-    !plant.healthStatus ||
-    !plant.userEmail ||
-    !plant.userName
-  ) {
-    return res
-      .status(400)
-      .json({ status: false, message: "All fields are required" });
-  }
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ status: false, message: "Invalid plant ID" });
   }
+
+  const requiredFields = [
+    "image",
+    "plantName",
+    "category",
+    "description",
+    "careLevel",
+    "wateringFrequency",
+    "lastWateredDate",
+    "nextWateringDate",
+    "healthStatus",
+    "userEmail",
+    "userName",
+  ];
+
+  const missingFields = requiredFields.filter((field) => !plant[field]);
+  if (missingFields.length > 0) {
+    return res.status(400).json({
+      status: false,
+      message: "All fields are required",
+      missingFields,
+    });
+  }
+
   try {
     const updatedPlant = await Plant.findByIdAndUpdate(id, plant, {
       new: true,
@@ -213,6 +261,13 @@ app.put("/api/plants/:id", async (req, res) => {
 });
 
 app.delete("/api/plants/:id", async (req, res) => {
+  if (!dbConnection) {
+    return res.status(503).json({
+      status: false,
+      message: "Database not connected",
+    });
+  }
+
   const { id } = req.params;
   if (!mongoose.Types.ObjectId.isValid(id)) {
     return res.status(400).json({ status: false, message: "Invalid plant ID" });
@@ -238,7 +293,23 @@ app.delete("/api/plants/:id", async (req, res) => {
   }
 });
 
-export default ServerlessHttp(app);
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-// });
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({
+    status: false,
+    message: "Internal server error",
+    error: process.env.NODE_ENV === "development" ? err.message : undefined,
+  });
+});
+
+// Export for Vercel
+export const handler = ServerlessHttp(app);
+
+// For local development
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
