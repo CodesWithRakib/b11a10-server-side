@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import cors from "cors";
+import ServerlessHttp from "serverless-http";
 dotenv.config();
 const PORT = process.env.PORT || 5000;
 
@@ -237,7 +238,7 @@ app.delete("/api/plants/:id", async (req, res) => {
   }
 });
 
-export default app;
+export default ServerlessHttp(app);
 // app.listen(PORT, () => {
 //   console.log(`Server is running on port ${PORT}`);
 // });
